@@ -714,7 +714,7 @@ class SequenceToSequence(object):
                     self.beam_prob = dod.beam_search_decoder_output.scores
 
     # 保存模型
-    def save(self, sess, save_path='model/model.ckpt'):
+    def save(self, sess, save_path='F:/文件/test/ChatRobot/model/model.ckpt'):
         """
         在TensorFlow里，保存模型的格式有两种：
         ckpt: 训练模型后的保存，这里面会保存所有的训练参数，文件相对来讲比较大，可以用来进行模型反复和加载
@@ -723,7 +723,7 @@ class SequenceToSequence(object):
         self.saver.save(sess, save_path=save_path)
 
     # 读取模型
-    def load(self, sess, save_path='model/model.ckpt'):
+    def load(self, sess, save_path='F:/文件/test/ChatRobot/model/model.ckpt'):
 
         print('try load model from', save_path)
         self.saver.restore(sess, save_path)
@@ -825,3 +825,90 @@ class SequenceToSequence(object):
             input_feed[self.decoder_inputs_length.name] = decoder_inputs_length
 
         return input_feed
+
+    # 训练模型
+    def train(self, sess, encoder_inputs, encoder_inputs_length, decoder_inputs, decoder_inputs_length, rewards=None,
+              return_lr=False, loss_only=False, add_loss=None):
+        # 输入
+        input_feed = self.check_feeds(
+            encoder_inputs, encoder_inputs_length,
+            decoder_inputs, decoder_inputs_length,
+            False
+        )
+
+        # 设置 dropout
+        input_feed[self.keep_prob_placeholder.name] = self.keep_prob
+
+        if loss_only:
+            # 输出
+            return sess.run(self.loss, input_feed)
+
+        if add_loss is not None:
+            input_feed[self.add_loss.name] = add_loss
+            output_feed = [
+                self.updates_add, self.loss_add,
+                self.current_learning_rate]
+            _, cost, lr = sess.run(output_feed, input_feed)
+
+            if return_lr:
+                return cost, lr
+
+            return cost
+
+        if rewards is not None:
+            input_feed[self.rewards.name] = rewards
+            output_feed = [
+                self.updates_rewards, self.loss_rewards,
+                self.current_learning_rate]
+            _, cost, lr = sess.run(output_feed, input_feed)
+
+            if return_lr:
+                return cost, lr
+            return cost
+
+        output_feed = [
+            self.updates, self.loss,
+            self.current_learning_rate]
+        _, cost, lr = sess.run(output_feed, input_feed)
+
+        if return_lr:
+            return cost, lr
+
+        return cost
+
+    # 预测输出
+    def predict(self, sess, encoder_inputs, encoder_inputs_length, attention=False):
+        # 输入
+        input_feed = self.check_feeds(encoder_inputs,
+                                      encoder_inputs_length, None, None, True)
+
+        input_feed[self.keep_prob_placeholder.name] = 1.0
+
+        # Attention 输出
+        if attention:
+            assert not self.use_beamsearch_decode, \
+                'Attention 模式不能打开 BeamSearch'
+
+            pred, atten = sess.run([
+                self.decoder_pred_decode,
+                self.final_state.alignment_history.stack()
+            ], input_feed)
+
+            return pred, atten
+
+        # BeamSearch 模式输出
+        if self.use_beamsearch_decode:
+            pred, beam_prob = sess.run([
+                self.decoder_pred_decode, self.beam_prob
+            ], input_feed)
+            beam_prob = np.mean(beam_prob, axis=1)
+
+            pred = pred[0]
+            return pred
+
+        # 普通（Greedy）模式输出
+        pred, = sess.run([
+            self.decoder_pred_decode
+        ], input_feed)
+
+        return pred

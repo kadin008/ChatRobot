@@ -8,6 +8,7 @@ from threading import Thread
 from queue import Queue
 
 
+# 线程生成器
 class ThreadedGenerator(object):
     def __init__(self, iterator, sentinel=object(), queue_maxsize=0, daemon=False):
         self._iterator = iterator
