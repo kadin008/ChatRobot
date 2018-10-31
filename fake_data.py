@@ -6,7 +6,7 @@ __date__ = '2018/10/28 22:44'
 import random
 import numpy as np
 
-from chatbot.word_sequence import WordSequence
+from word_sequence import WordSequence
 
 
 def generate(max_len=10, size=1000, same_len=False, seed=0):

@@ -6,7 +6,7 @@ __date__ = '2018/10/28 17:23'
 import random
 import numpy as np
 from tensorflow.python.client import device_lib
-from chatbot.word_sequence import WordSequence
+from word_sequence import WordSequence
 
 VOCAB_SIZE_THRESHOLD_CPU = 50000
 
@@ -168,7 +168,7 @@ def batch_flow_bucket(data, ws, batch_size, raw=False, add_end=True, n_bucket=5,
 
 
 def test_batch_flow():
-    from chatbot.fake_data import generate
+    from fake_data import generate
     x_data, y_data, ws_input, ws_target = generate(size=10000)
     flow = batch_flow([x_data, y_data], [ws_input, ws_target], 4)
     x, xl, y, yl = next(flow)
@@ -176,7 +176,7 @@ def test_batch_flow():
 
 
 def test_batch_flow_bucket():
-    from chatbot.fake_data import generate
+    from fake_data import generate
     x_data, y_data, ws_input, ws_target = generate(size=10000)
     flow = batch_flow_bucket([x_data, y_data], [ws_input, ws_target], 4, debug=True)
     for _ in range(10):
@@ -188,5 +188,5 @@ if __name__ == '__main__':
     # print(_get_available_gpus())
     # size = 300000
     # print(_get_embed_device(size))
-    # test_batch_flow()
-    test_batch_flow_bucket()
+    test_batch_flow()
+    # test_batch_flow_bucket()

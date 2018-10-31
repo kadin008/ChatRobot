@@ -33,11 +33,11 @@ def regular(sen):
 
 
 def main(limit=20, x_limit=3, y_limit=6):
-    from chatbot.word_sequence import WordSequence
+    from word_sequence import WordSequence
 
     print('extract lines')
     # E:\PythonWork\ChatRobot\chatbot\data\dgk_shooter_min.conv
-    fp = open('E:/PythonWork/ChatRobot/chatbot/data/dgk_shooter_min.conv', 'r', errors='ignore', encoding='utf-8')
+    fp = open('data/dgk_shooter_min.conv', 'r', errors='ignore', encoding='utf-8')
 
     groups = []
     group = []
@@ -119,11 +119,11 @@ def main(limit=20, x_limit=3, y_limit=6):
 
     pickle.dump(
         (x_data, y_data),
-        open('E:/PythonWork/ChatRobot/chatbot/data/chatbot.pkl', 'wb')
+        open('data/chatbot.pkl', 'wb')
 
     )
 
-    pickle.dump(ws_input, open('E:/PythonWork/ChatRobot/chatbot/data/ws.pkl', 'wb'))
+    pickle.dump(ws_input, open('data/ws.pkl', 'wb'))
 
     print('done')
 

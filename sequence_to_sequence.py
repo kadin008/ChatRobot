@@ -20,8 +20,8 @@ from tensorflow.contrib.rnn import MultiRNNCell
 from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import ResidualWrapper
 
-from chatbot.word_sequence import WordSequence
-from chatbot.utils.data_utils import _get_embed_device
+from word_sequence import WordSequence
+from utils.data_utils import _get_embed_device
 
 
 class SequenceToSequence(object):
