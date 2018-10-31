@@ -24,6 +24,7 @@ from word_sequence import WordSequence
 from utils.data_utils import _get_embed_device
 
 
+#  基本流程
 class SequenceToSequence(object):
     """SequenceToSequence Model
 
@@ -42,6 +43,7 @@ class SequenceToSequence(object):
         predict 预测一个batch的数据
         """
 
+    # 开始构建整个模型
     def __init__(self,
                  input_vocab_size,
                  target_vocab_size,
@@ -184,6 +186,7 @@ class SequenceToSequence(object):
 
         self.build_model()
 
+    # 构建整个模型
     def build_model(self):
         """
         构建整个模型
@@ -193,14 +196,15 @@ class SequenceToSequence(object):
         优化器（只在训练时构建，optimizer）
         """
         self.init_placeholders()
-        # encoder_outputs, encoder_state = self.build_encoder()
-        # self.build_decoder(encoder_outputs, encoder_state)
-        #
-        # if self.mode == 'train':
-        #     self.init_optimizer()
-        #
-        # self.saver = tf.train.Saver()
+        encoder_outputs, encoder_state = self.build_encoder()
+        self.build_decoder(encoder_outputs, encoder_state)
 
+        if self.mode == 'train':
+            self.init_optimizer()
+
+        self.saver = tf.train.Saver()
+
+    # 初始化训练、预测所需的变量
     def init_placeholders(self):
         """ 初始化训练、预测所需的变量 """
 
@@ -260,6 +264,7 @@ class SequenceToSequence(object):
                 self.decoder_inputs
             ], axis=1)
 
+    # 构建一个单独的rnn cell
     def build_single_cell(self, n_hidden, use_residual):
         """
         构建一个单独的rnn cell
@@ -287,6 +292,7 @@ class SequenceToSequence(object):
 
         return cell
 
+    # 构建一个单独的编码器cell
     def build_encoder_cell(self):
         """ 构建一个单独的编码器cell """
         return MultiRNNCell([
@@ -297,6 +303,7 @@ class SequenceToSequence(object):
             for _ in range(self.depth)
         ])
 
+    # 构建编码器
     def build_encoder(self):
         """ 构建编码器 """
         # print("构建编码器")
@@ -390,6 +397,7 @@ class SequenceToSequence(object):
 
         return encoder_outputs, encoder_state
 
+    # 构建解码器cell
     def build_decoder_cell(self, encoder_outputs, encoder_state):
         """构建解码器cell"""
         encoder_inputs_length = self.encoder_inputs_length
@@ -475,6 +483,7 @@ class SequenceToSequence(object):
 
             return cell, decoder_initial_state
 
+    # 构建解码器
     def build_decoder(self, encoder_outputs, encoder_state):
         """构建解码器"""
         with tf.variable_scope('decoder') as decoder_scope:
@@ -518,6 +527,7 @@ class SequenceToSequence(object):
                 name='decoder_output_projection'
             )
 
+            # 训练--train
             if self.mode == 'train':
                 self.decoder_inputs_embedded = tf.nn.embedding_lookup(
                     params=self.decoder_embeddings,
@@ -702,3 +712,116 @@ class SequenceToSequence(object):
                         perm=[0, 2, 1])
                     dod = self.decoder_outputs_decode
                     self.beam_prob = dod.beam_search_decoder_output.scores
+
+    # 保存模型
+    def save(self, sess, save_path='model/model.ckpt'):
+        """
+        在TensorFlow里，保存模型的格式有两种：
+        ckpt: 训练模型后的保存，这里面会保存所有的训练参数，文件相对来讲比较大，可以用来进行模型反复和加载
+        pd: 用于模型最后的线上部署，这里面的线上部署指的是TensorFlow Serving进行模型发布，一般发布成grpc形式的接口
+        """
+        self.saver.save(sess, save_path=save_path)
+
+    # 读取模型
+    def load(self, sess, save_path='model/model.ckpt'):
+
+        print('try load model from', save_path)
+        self.saver.restore(sess, save_path)
+
+    # 初始化优化器
+    def init_optimizer(self):
+        """
+        初始化优化器
+        支持的方法有 sgd, adadelta, adam, rmsprop, momentum
+        """
+        # 学习率下降算法
+        learning_rate = tf.train.polynomial_decay(
+            self.learning_rate,
+            self.global_step,
+            self.decay_steps,
+            self.min_learning_rate,
+            power=0.5
+        )
+        self.current_learning_rate = learning_rate
+
+        # 返回需要训练的参数的列表
+        trainable_params = tf.trainable_variables()
+        # 设置优化器,合法的优化器如下
+        # 'adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'
+        if self.optimizer.lower() == 'adadelta':
+            self.opt = tf.train.AdadeltaOptimizer(
+                learning_rate=learning_rate)
+        elif self.optimizer.lower() == 'adam':
+            self.opt = tf.train.AdamOptimizer(
+                learning_rate=learning_rate)
+        elif self.optimizer.lower() == 'rmsprop':
+            self.opt = tf.train.RMSPropOptimizer(
+                learning_rate=learning_rate)
+        elif self.optimizer.lower() == 'momentum':
+            self.opt = tf.train.MomentumOptimizer(
+                learning_rate=learning_rate, momentum=0.9)
+        elif self.optimizer.lower() == 'sgd':
+            self.opt = tf.train.GradientDescentOptimizer(
+                learning_rate=learning_rate)
+
+        gradients = tf.gradients(self.loss, trainable_params)
+
+        # Clip gradients by a given maximum_gradient_norm
+        # 梯度裁剪
+        clip_gradients, _ = tf.clip_by_global_norm(
+            gradients, self.max_gradient_norm)
+        # Update the model
+        # 更新model
+        self.updates = self.opt.apply_gradients(
+            zip(clip_gradients, trainable_params),
+            global_step=self.global_step)
+
+        # 使用包括rewards的loss进行更新
+        # 是特殊学习的一部分
+        gradients = tf.gradients(self.loss_rewards, trainable_params)
+        clip_gradients, _ = tf.clip_by_global_norm(
+            gradients, self.max_gradient_norm)
+        self.updates_rewards = self.opt.apply_gradients(
+            zip(clip_gradients, trainable_params),
+            global_step=self.global_step)
+
+        # 添加 self.loss_add 的 update
+        gradients = tf.gradients(self.loss_add, trainable_params)
+        clip_gradients, _ = tf.clip_by_global_norm(
+            gradients, self.max_gradient_norm)
+        self.updates_add = self.opt.apply_gradients(
+            zip(clip_gradients, trainable_params),
+            global_step=self.global_step)
+
+    # 输入变量检查
+    def check_feeds(self, encoder_inputs, encoder_inputs_length, decoder_inputs, decoder_inputs_length, decode):
+        input_batch_size = encoder_inputs.shape[0]
+        if input_batch_size != encoder_inputs_length.shape[0]:
+            raise ValueError(
+                "encoder_inputs和encoder_inputs_length的第一维度必须一致 "
+                "这一维度是batch_size, %d != %d" % (
+                    input_batch_size, encoder_inputs_length.shape[0]))
+
+        if not decode:
+            target_batch_size = decoder_inputs.shape[0]
+            if target_batch_size != input_batch_size:
+                raise ValueError(
+                    "encoder_inputs和decoder_inputs的第一维度必须一致 "
+                    "这一维度是batch_size, %d != %d" % (
+                        input_batch_size, target_batch_size))
+            if target_batch_size != decoder_inputs_length.shape[0]:
+                raise ValueError(
+                    "edeoder_inputs和decoder_inputs_length的第一维度必须一致 "
+                    "这一维度是batch_size, %d != %d" % (
+                        target_batch_size, decoder_inputs_length.shape[0]))
+
+        input_feed = {}
+
+        input_feed[self.encoder_inputs.name] = encoder_inputs
+        input_feed[self.encoder_inputs_length.name] = encoder_inputs_length
+
+        if not decode:
+            input_feed[self.decoder_inputs.name] = decoder_inputs
+            input_feed[self.decoder_inputs_length.name] = decoder_inputs_length
+
+        return input_feed
