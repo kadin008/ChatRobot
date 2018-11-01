@@ -3,7 +3,6 @@
 __author__: 'Patrick Wang'
 __date__: '2018/10/31 15:40'
 
-import sys
 import random
 import pickle
 import numpy as np
@@ -14,7 +13,7 @@ from tqdm import tqdm
 # 训练
 def test(params):
     from sequence_to_sequence import SequenceToSequence
-    from utils.data_utils import batch_flow_bucket as batch_flow
+    from data_utils import batch_flow_bucket as batch_flow
     from threadedgenerator import ThreadedGenerator
 
     x_data, y_data = pickle.load(open('data/chatbot.pkl', 'rb'))
@@ -40,7 +39,7 @@ def test(params):
     )
 
     # save_path = open('model/s2ss_chatbot.ckpt', 'wb')
-    save_path = 'F:/文件/test/ChatRobot/model/s2ss_chatbot.ckpt'
+    save_path = './model/s2ss_chatbot.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -120,7 +119,7 @@ def test(params):
 
 def main():
     import json
-    test(json.load(open('json/params.json')))
+    test(json.load(open('params.json')))
 
 
 if __name__ == '__main__':

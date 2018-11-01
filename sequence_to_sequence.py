@@ -21,7 +21,7 @@ from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import ResidualWrapper
 
 from word_sequence import WordSequence
-from utils.data_utils import _get_embed_device
+from data_utils import _get_embed_device
 
 
 #  基本流程
@@ -400,6 +400,7 @@ class SequenceToSequence(object):
     # 构建解码器cell
     def build_decoder_cell(self, encoder_outputs, encoder_state):
         """构建解码器cell"""
+
         encoder_inputs_length = self.encoder_inputs_length
         batch_size = self.batch_size
 
@@ -410,6 +411,7 @@ class SequenceToSequence(object):
             encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
 
         # 使用 BeamSearchDecoder 的时候，必须根据 beam_width 来成倍的扩大一些变量
+
         if self.use_beamsearch_decode:
             encoder_outputs = seq2seq.tile_batch(
                 encoder_outputs, multiplier=self.beam_width)
@@ -420,68 +422,65 @@ class SequenceToSequence(object):
             # 如果使用了 beamsearch 那么输入应该是 beam_width 倍于 batch_size 的
             batch_size *= self.beam_width
 
-            # 下面是两种不同的 Attention 机制
-            if self.attention_type.lower() == 'luong':
-                # 'Luong' style attention: https://arxiv.org/abs/1508.04025
-                self.attention_mechanism = LuongAttention(
-                    num_units=self.hidden_units,
-                    memory=encoder_outputs,
-                    memory_sequence_length=encoder_inputs_length
-                )
-            else:  # Default Bahdanau
-                # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
-                self.attention_mechanism = BahdanauAttention(
-                    num_units=self.hidden_units,
-                    memory=encoder_outputs,
-                    memory_sequence_length=encoder_inputs_length
-                )
-
-            # Building decoder_cell
-            cell = MultiRNNCell([
-                self.build_single_cell(
-                    self.hidden_units,
-                    use_residual=self.use_residual
-                )
-                for _ in range(self.depth)
-            ])
-
-            # 在非训练（预测）模式，并且没开启 beamsearch 的时候，打开 attention 历史信息
-            alignment_history = (
-                    self.mode != 'train' and not self.use_beamsearch_decode
+        # 下面是两种不同的 Attention 机制
+        if self.attention_type.lower() == 'luong':
+            # 'Luong' style attention: https://arxiv.org/abs/1508.04025
+            self.attention_mechanism = LuongAttention(
+                num_units=self.hidden_units,
+                memory=encoder_outputs,
+                memory_sequence_length=encoder_inputs_length
+            )
+        else:  # Default Bahdanau
+            # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
+            self.attention_mechanism = BahdanauAttention(
+                num_units=self.hidden_units,
+                memory=encoder_outputs,
+                memory_sequence_length=encoder_inputs_length
             )
 
-            def cell_input_fn(inputs, attention):
-                """根据attn_input_feeding属性来判断是否在attention计算前进行一次投影计算
-                """
-                if not self.use_residual:
-                    return array_ops.concat([inputs, attention], -1)
-
-                attn_projection = layers.Dense(self.hidden_units,
-                                               dtype=tf.float32,
-                                               use_bias=False,
-                                               name='attention_cell_input_fn')
-                return attn_projection(array_ops.concat([inputs, attention], -1))
-
-            cell = AttentionWrapper(
-                cell=cell,
-                attention_mechanism=self.attention_mechanism,
-                attention_layer_size=self.hidden_units,
-                alignment_history=alignment_history,
-                cell_input_fn=cell_input_fn,
-                name='Attention_Wrapper'
+        # Building decoder_cell
+        cell = MultiRNNCell([
+            self.build_single_cell(
+                self.hidden_units,
+                use_residual=self.use_residual
             )
+            for _ in range(self.depth)
+        ])
 
-            # 空状态
-            decoder_initial_state = cell.zero_state(
-                batch_size, tf.float32
-            )
+        # 在非训练（预测）模式，并且没开启 beamsearch 的时候，打开 attention 历史信息
+        alignment_history = (
+                self.mode != 'train' and not self.use_beamsearch_decode
+        )
 
-            # 传递encoder状态
-            decoder_initial_state = decoder_initial_state.clone(
-                cell_state=encoder_state
-            )
+        def cell_input_fn(inputs, attention):
+            """根据attn_input_feeding属性来判断是否在attention计算前进行一次投影计算
+            """
+            if not self.use_residual:
+                return array_ops.concat([inputs, attention], -1)
 
-            return cell, decoder_initial_state
+            attn_projection = layers.Dense(self.hidden_units,
+                                           dtype=tf.float32,
+                                           use_bias=False,
+                                           name='attention_cell_input_fn')
+            return attn_projection(array_ops.concat([inputs, attention], -1))
+
+        cell = AttentionWrapper(
+            cell=cell,
+            attention_mechanism=self.attention_mechanism,
+            attention_layer_size=self.hidden_units,
+            alignment_history=alignment_history,
+            cell_input_fn=cell_input_fn,
+            name='Attention_Wrapper')
+
+        # 空状态
+        decoder_initial_state = cell.zero_state(
+            batch_size, tf.float32)
+
+        # 传递encoder状态
+        decoder_initial_state = decoder_initial_state.clone(
+            cell_state=encoder_state)
+
+        return cell, decoder_initial_state
 
     # 构建解码器
     def build_decoder(self, encoder_outputs, encoder_state):
